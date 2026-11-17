@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบสะสมแต้มแสนน่ารัก</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        blue: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            900: '#1e3a8a',
+                        },
+                        cyan: {
+                            100: '#cffafe',
+                            500: '#06b6d4',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f8fafc; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .hide { display: none !important; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        input:checked ~ .toggle-bg { background-color: #3b82f6; }
+        input:checked ~ .toggle-dot { transform: translateX(100%); }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-slate-800 antialiased font-sans">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 w-[90%] max-w-sm pointer-events-none"></div>
+
+    <!-- App Container -->
+    <div class="max-w-md mx-auto bg-white flex flex-col shadow-xl relative pb-20 overflow-hidden min-h-screen w-full">
+        
+        <!-- Header -->
+        <header class="bg-gradient-to-r from-blue-400 to-cyan-400 text-white p-5 rounded-b-3xl shadow-md relative z-10 flex-shrink-0">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-2">
+                    <i class="ph-fill ph-star text-2xl text-yellow-300"></i>
+                    <h1 class="text-xl font-bold">Point Jai</h1>
+                </div>
+                <!-- Role Display & Logout -->
+                <div class="flex gap-2">
+                    <button id="btn-logout" onclick="logout()" class="hidden bg-red-500/80 hover:bg-red-500 px-3 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1 backdrop-blur-sm">
+                        <i class="ph ph-sign-out"></i> ออกระบบ
+                    </button>
+                    <div id="role-badge" class="hidden bg-white/20 px-3 py-1.5 rounded-full text-sm font-medium flex items-center gap-1 backdrop-blur-sm">
+                        <i class="ph ph-user"></i> <span id="current-role-display">กำลังโหลด...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Customer Point Summary -->
+            <div id="header-points-area" class="hidden bg-white/20 p-4 rounded-2xl backdrop-blur-sm border border-white/30 text-center">
+                <p class="text-sm font-medium mb-1">แต้มสะสมของคุณ <span id="display-username" class="font-bold text-yellow-200"></span></p>
+                <div class="flex justify-center items-end gap-1">
+                    <span id="display-user-points" class="text-4xl font-bold">0</span>
+                    <span class="text-lg pb-1">แต้ม</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 p-5 overflow-y-auto relative z-0 flex flex-col">
+            
+            <!-- ============================================== -->
+            <!-- AUTHENTICATION / LOADING VIEW -->
+            <!-- ============================================== -->
+            <div id="auth-view" class="flex-1 flex flex-col justify-center items-center pb-10">
+                <div class="w-full bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+                    <div class="text-center mb-6">
+                        <div id="auth-icon-container" class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-3 transition-colors">
+                            <i id="auth-icon" class="ph-fill ph-spinner-gap animate-spin text-3xl"></i>
+                        </div>
+                        <h2 id="auth-title" class="text-xl font-bold text-blue-900">กำลังเชื่อมต่อระบบ...</h2>
+                        <p id="auth-subtitle" class="text-sm text-slate-500 mt-1">กรุณารอสักครู่</p>
+                    </div>
+
+                    <!-- ฟอร์มล็อกอิน (ซ่อนไว้ก่อนจนกว่าจะโหลดเสร็จ) -->
+                    <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4 hidden fade-in">
+                        <div id="auth-input-group">
+                            <div>
+                                <label for="auth-email" class="block text-sm font-medium text-slate-700 mb-1">อีเมล (Email)</label>
+                                <input type="email" id="auth-email" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-400 focus:bg-white transition">
+                            </div>
+                            <div id="auth-username-group" class="hidden mt-4">
+                                <label for="auth-display-name" class="block text-sm font-medium text-slate-700 mb-1">ชื่อที่แสดง (Display Name)</label>
+                                <input type="text" id="auth-display-name" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-400 focus:bg-white transition">
+                            </div>
+                            <div class="mt-4">
+                                <label for="auth-password" class="block text-sm font-medium text-slate-700 mb-1">รหัสผ่าน (Password)</label>
+                                <input type="password" id="auth-password" minlength="6" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-400 focus:bg-white transition">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" id="auth-btn" class="w-full py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 shadow-lg shadow-blue-500/30 transition mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            เข้าสู่ระบบ
+                        </button>
+                    </form>
+
+                    <div id="auth-switch-block" class="mt-6 text-center text-sm hidden fade-in">
+                        <span id="auth-switch-text" class="text-slate-500">ยังไม่มีบัญชีใช่ไหม?</span>
+                        <button type="button" onclick="toggleAuthMode()" id="auth-switch-btn" class="text-blue-600 font-bold hover:underline ml-1 disabled:opacity-50">สมัครสมาชิก</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- CUSTOMER VIEWS -->
+            <!-- ============================================== -->
+            <div id="customer-views" class="hidden h-full">
+                
+                <!-- 1. Home / Upload Slip -->
+                <div id="view-cust-home" class="view-section">
+                    <h2 class="text-lg font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <i class="ph ph-upload-simple text-blue-500 text-xl"></i> อัปโหลดสลิปสะสมแต้ม
+                    </h2>
+                    
+                    <div id="slip-system-status-msg" class="bg-red-50 text-red-600 p-4 rounded-xl text-sm mb-4 border border-red-100 hidden">
+                        <i class="ph ph-warning-circle inline text-lg mb-1"></i> <span id="slip-msg-text">กำลังโหลดการตั้งค่า...</span>
+                    </div>
+
+                    <div id="slip-upload-area" class="bg-blue-50 border-2 border-dashed border-blue-200 rounded-2xl p-6 text-center transition-all hover:border-blue-400">
+                        <input type="file" id="slip-input" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+                        
+                        <div id="upload-prompt" class="cursor-pointer" onclick="document.getElementById('slip-input').click()">
+                            <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-500">
+                                <i class="ph ph-image text-3xl"></i>
+                            </div>
+                            <p class="text-blue-900 font-medium">คลิกเพื่อเลือกรูปสลิป</p>
+                            <p class="text-sm text-slate-500 mt-1">1 สลิป = 1 แต้ม</p>
